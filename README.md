@@ -104,3 +104,4 @@ Result:
 - Stop action terminates download process tree on Windows.
 - App auto-uses bundled ffmpeg when available.
 - Logs are decoded using system encoding for better Windows locale compatibility.
+

@@ -35,11 +35,15 @@ pyinstaller --name yt-dlp-gui --onefile --windowed `
   --add-binary "portable-runtime\yt-dlp.exe;." `
   --add-binary "portable-runtime\ffmpeg\ffmpeg.exe;ffmpeg" `
   --add-binary "portable-runtime\ffmpeg\ffprobe.exe;ffmpeg" `
+  --add-data "assets\logo-square.svg;assets" `
   yt_dlp_gui.py
 ```
 
 Output:
 - `dist\yt-dlp-gui.exe`
+
+Bundled assets include:
+- `assets/logo-square.svg`
 
 ## 4) Verify portable behavior
 

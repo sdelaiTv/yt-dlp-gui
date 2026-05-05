@@ -16,7 +16,7 @@ from tkinter import filedialog, messagebox, ttk
 class YtDlpGui(tk.Tk):
     def __init__(self):
         super().__init__()
-        self.title("yt-dlp Desktop GUI")
+        self.title("Electrolab Video Downloader (Based on yt-dlp)")
         self.geometry("1120x760")
         self.minsize(980, 660)
         self.configure(bg="#0e1219")
@@ -73,9 +73,7 @@ class YtDlpGui(tk.Tk):
                 "template_date_title": "Дата + название",
                 "template_channel_title": "Канал/плейлист/название",
                 "template_title_id": "Название + ID",
-                "media_profile": "Профиль медиатеки",
-                "profile_standard": "Обычный",
-                "profile_plex_emby": "Plex / Emby (папка на видео)",
+                "library_folder_checkbox": "Plex/Emby: вложить файл в одноименную папку",
                 "template_preview": "Превью итогового шаблона",
                 "command_preview": "Предпросмотр команды",
                 "status": "Статус",
@@ -123,9 +121,7 @@ class YtDlpGui(tk.Tk):
                 "template_date_title": "Date + title",
                 "template_channel_title": "Channel/playlist/title",
                 "template_title_id": "Title + ID",
-                "media_profile": "Media profile",
-                "profile_standard": "Standard",
-                "profile_plex_emby": "Plex / Emby (folder per video)",
+                "library_folder_checkbox": "Plex/Emby: put file in same-name folder",
                 "template_preview": "Effective template preview",
                 "command_preview": "Command Preview",
                 "status": "Status",
@@ -173,9 +169,7 @@ class YtDlpGui(tk.Tk):
                 "template_date_title": "日期 + 标题",
                 "template_channel_title": "频道/播放列表/标题",
                 "template_title_id": "标题 + ID",
-                "media_profile": "媒体库配置",
-                "profile_standard": "标准",
-                "profile_plex_emby": "Plex / Emby（每个视频单独文件夹）",
+                "library_folder_checkbox": "Plex/Emby：将文件放入同名文件夹",
                 "template_preview": "最终模板预览",
                 "command_preview": "命令预览",
                 "status": "状态",
@@ -203,7 +197,7 @@ class YtDlpGui(tk.Tk):
         self.extra_args_var = tk.StringVar()
         self.filename_preset_var = tk.StringVar(value="custom")
         self.filename_template_var = tk.StringVar(value="%(title)s.%(ext)s")
-        self.media_profile_var = tk.StringVar(value="standard")
+        self.library_folder_var = tk.BooleanVar(value=False)
         self.template_preview_var = tk.StringVar(value="")
         self._syncing_template = False
         self.status_var = tk.StringVar(value="Ready")
@@ -224,6 +218,7 @@ class YtDlpGui(tk.Tk):
         self._build_ui()
         self._wire_events()
         self._bind_ctrl_shortcuts_layout_agnostic()
+        self._set_window_icon()
         self._sync_proxy_state()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
         self.after(120, self._drain_log_queue)
@@ -346,6 +341,7 @@ class YtDlpGui(tk.Tk):
             font=("Segoe UI", 10),
             **kw,
         )
+        self._bind_scroll_passthrough(entry)
         return entry
 
     def _make_combobox(self, parent, textvariable, values, **kw):
@@ -358,7 +354,22 @@ class YtDlpGui(tk.Tk):
             font=("Segoe UI", 10),
             **kw,
         )
+        self._bind_scroll_passthrough(combo)
         return combo
+
+    def _bind_scroll_passthrough(self, widget):
+        """Prevent widget wheel side-effects and scroll the page instead."""
+        widget.bind("<MouseWheel>", self._on_input_mousewheel, add="+")
+        widget.bind("<Button-4>", self._on_input_mousewheel_linux, add="+")
+        widget.bind("<Button-5>", self._on_input_mousewheel_linux, add="+")
+
+    def _on_input_mousewheel(self, event):
+        self._on_mousewheel(event)
+        return "break"
+
+    def _on_input_mousewheel_linux(self, event):
+        self._on_mousewheel_linux(event)
+        return "break"
 
     # ---------- UI building ----------
     def _build_ui(self):
@@ -431,12 +442,14 @@ class YtDlpGui(tk.Tk):
     def _on_mousewheel(self, event):
         if event.delta:
             self.scroll_canvas.yview_scroll(int(-event.delta / 120), "units")
+        return "break"
 
     def _on_mousewheel_linux(self, event):
         if event.num == 4:
             self.scroll_canvas.yview_scroll(-1, "units")
         elif event.num == 5:
             self.scroll_canvas.yview_scroll(1, "units")
+        return "break"
 
     def _card(self, parent):
         frame = tk.Frame(parent, bg=self.card_bg, padx=12, pady=10)
@@ -480,8 +493,11 @@ class YtDlpGui(tk.Tk):
         vframe = tk.Frame(card, bg=self.card_bg)
         vframe.grid(row=0, column=1, sticky="nsew", padx=8)
         vframe.grid_rowconfigure(10, weight=1)
-        tk.Label(vframe, text=self.t("video_settings"), bg=self.card_bg, fg=self.fg_dim, font=("Segoe UI", 9)).pack(anchor="w")
-        tk.Label(vframe, text=self.t("video_format"), bg=self.card_bg, fg=self.fg, font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 0))
+        self.video_section_frame = vframe
+        video_title = tk.Label(vframe, text=self.t("video_settings"), bg=self.card_bg, fg=self.fg_dim, font=("Segoe UI", 9))
+        video_title.pack(anchor="w")
+        video_format_label = tk.Label(vframe, text=self.t("video_format"), bg=self.card_bg, fg=self.fg, font=("Segoe UI", 9))
+        video_format_label.pack(anchor="w", pady=(4, 0))
         self.video_format_combo = self._make_combobox(vframe, self.video_format_var, [
             "bestvideo+bestaudio/best",
             "best",
@@ -495,18 +511,24 @@ class YtDlpGui(tk.Tk):
         ])
         self.video_format_combo.pack(fill="x", pady=(2, 4))
         tk.Frame(vframe, bg=self.card_bg).pack(expand=True)
+        self.video_section_labels = [video_title, video_format_label]
 
         aframe = tk.Frame(card, bg=self.card_bg)
         aframe.grid(row=0, column=2, sticky="nsew", padx=8)
         aframe.grid_rowconfigure(10, weight=1)
-        tk.Label(aframe, text=self.t("audio_settings"), bg=self.card_bg, fg=self.fg_dim, font=("Segoe UI", 9)).pack(anchor="w")
-        tk.Label(aframe, text=self.t("audio_format"), bg=self.card_bg, fg=self.fg, font=("Segoe UI", 9)).pack(anchor="w", pady=(4, 0))
+        self.audio_section_frame = aframe
+        audio_title = tk.Label(aframe, text=self.t("audio_settings"), bg=self.card_bg, fg=self.fg_dim, font=("Segoe UI", 9))
+        audio_title.pack(anchor="w")
+        audio_format_label = tk.Label(aframe, text=self.t("audio_format"), bg=self.card_bg, fg=self.fg, font=("Segoe UI", 9))
+        audio_format_label.pack(anchor="w", pady=(4, 0))
         self.audio_format_combo = self._make_combobox(aframe, self.audio_format_var, ["best", "mp3", "m4a", "aac", "flac", "opus", "vorbis", "wav"])
         self.audio_format_combo.pack(fill="x", pady=(2, 4))
-        tk.Label(aframe, text=self.t("audio_quality"), bg=self.card_bg, fg=self.fg, font=("Segoe UI", 9)).pack(anchor="w")
+        audio_quality_label = tk.Label(aframe, text=self.t("audio_quality"), bg=self.card_bg, fg=self.fg, font=("Segoe UI", 9))
+        audio_quality_label.pack(anchor="w")
         self.audio_quality_combo = self._make_combobox(aframe, self.audio_quality_var, ["0", "1", "2", "3", "4", "5", "7", "10", "96K", "128K", "160K", "192K", "256K", "320K"], width=10)
         self.audio_quality_combo.pack(anchor="w", pady=(2, 0))
         tk.Frame(aframe, bg=self.card_bg).pack(expand=True)
+        self.audio_section_labels = [audio_title, audio_format_label, audio_quality_label]
 
         # Row 1: toggles
         toggles = tk.Frame(card, bg=self.card_bg)
@@ -590,28 +612,23 @@ class YtDlpGui(tk.Tk):
         self.filename_preset_combo = self._make_combobox(card, self.filename_preset_label_var, [label for _, label in preset_values])
         self.filename_preset_combo.grid(row=2, column=0, sticky="ew", padx=(0, 8))
         self.filename_preset_combo.bind("<<ComboboxSelected>>", self._on_template_preset_changed)
+        self.library_folder_check = ttk.Checkbutton(
+            card,
+            text=self.t("library_folder_checkbox"),
+            variable=self.library_folder_var,
+            command=self._on_library_folder_toggled,
+        )
+        self.library_folder_check.grid(row=3, column=0, sticky="w", padx=(0, 8), pady=(6, 0))
 
-        tk.Label(card, text=self.t("media_profile"), bg=self.card_bg, fg=self.fg, font=("Segoe UI", 9)).grid(row=1, column=1, sticky="w", padx=(8, 0))
-        profile_values = [self.t("profile_standard"), self.t("profile_plex_emby")]
-        self.profile_label_to_key = {
-            self.t("profile_standard"): "standard",
-            self.t("profile_plex_emby"): "plex_emby",
-        }
-        self.profile_key_to_label = {v: k for k, v in self.profile_label_to_key.items()}
-        self.media_profile_label_var = tk.StringVar(value=self.profile_key_to_label.get(self.media_profile_var.get(), self.t("profile_standard")))
-        self.media_profile_combo = self._make_combobox(card, self.media_profile_label_var, profile_values)
-        self.media_profile_combo.grid(row=2, column=1, sticky="ew", padx=(8, 0))
-        self.media_profile_combo.bind("<<ComboboxSelected>>", self._on_media_profile_changed)
-
-        tk.Label(card, text=self.t("filename_template"), bg=self.card_bg, fg=self.fg, font=("Segoe UI", 9)).grid(row=3, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        tk.Label(card, text=self.t("filename_template"), bg=self.card_bg, fg=self.fg, font=("Segoe UI", 9)).grid(row=4, column=0, columnspan=2, sticky="w", pady=(8, 0))
         template_entry = self._make_entry(card, self.filename_template_var)
-        template_entry.grid(row=4, column=0, columnspan=2, sticky="ew")
+        template_entry.grid(row=5, column=0, columnspan=2, sticky="ew")
         template_entry.configure(highlightthickness=1, bd=0)
         template_entry.bind("<KeyRelease>", self._on_template_manual_edit)
 
-        tk.Label(card, text=self.t("template_preview"), bg=self.card_bg, fg=self.fg_dim, font=("Segoe UI", 9)).grid(row=5, column=0, columnspan=2, sticky="w", pady=(8, 0))
+        tk.Label(card, text=self.t("template_preview"), bg=self.card_bg, fg=self.fg_dim, font=("Segoe UI", 9)).grid(row=6, column=0, columnspan=2, sticky="w", pady=(8, 0))
         preview = self._make_entry(card, self.template_preview_var)
-        preview.grid(row=6, column=0, columnspan=2, sticky="ew")
+        preview.grid(row=7, column=0, columnspan=2, sticky="ew")
         preview.configure(state="readonly", readonlybackground=self.entry_bg, disabledforeground=self.fg_dim, highlightthickness=1, bd=0)
         self._sync_template_with_preset()
 
@@ -706,7 +723,7 @@ class YtDlpGui(tk.Tk):
             self.extra_args_var,
             self.filename_preset_var,
             self.filename_template_var,
-            self.media_profile_var,
+            self.library_folder_var,
             self.download_playlist_var,
             self.embed_metadata_var,
             self.write_thumbnail_var,
@@ -732,15 +749,12 @@ class YtDlpGui(tk.Tk):
         self._apply_template_preset(selected_key)
         self._on_settings_changed()
 
-    def _on_media_profile_changed(self, _event):
-        selected_label = self.media_profile_label_var.get()
-        selected_key = self.profile_label_to_key.get(selected_label, "standard")
-        self.media_profile_var.set(selected_key)
-        if selected_key == "plex_emby":
-            current = self.filename_template_var.get().strip() or "%(title)s.%(ext)s"
-            if "/" not in current and "\\" not in current:
-                # Put each item into its own folder without forcing ID.
-                self.filename_template_var.set(f"%(title)s/{current}")
+    def _on_library_folder_toggled(self):
+        template = self.filename_template_var.get().strip() or "%(title)s.%(ext)s"
+        if self.library_folder_var.get():
+            self.filename_template_var.set(self._folderize_template(template))
+        else:
+            self.filename_template_var.set(self._unfolderize_template(template))
         self._update_template_preview()
         self._on_settings_changed()
 
@@ -759,8 +773,32 @@ class YtDlpGui(tk.Tk):
             "channel_title": "%(uploader)s/%(playlist_title|single)s/%(title)s [%(id)s].%(ext)s",
         }
         if preset_key != "custom":
-            self.filename_template_var.set(templates.get(preset_key, templates["title_id"]))
+            base = templates.get(preset_key, templates["title_id"])
+            if self.library_folder_var.get():
+                base = self._folderize_template(base)
+            self.filename_template_var.set(base)
         self._update_template_preview()
+
+    def _folderize_template(self, template):
+        t = (template or "").strip()
+        if not t:
+            t = "%(title)s.%(ext)s"
+        if "/" in t or "\\" in t:
+            return t
+        suffix = ".%(ext)s"
+        stem = t[:-len(suffix)] if t.endswith(suffix) else t
+        return f"{stem}/{t}"
+
+    def _unfolderize_template(self, template):
+        t = (template or "").strip()
+        if "/" not in t:
+            return t
+        left, right = t.split("/", 1)
+        suffix = ".%(ext)s"
+        rstem = right[:-len(suffix)] if right.endswith(suffix) else right
+        if left == rstem:
+            return right
+        return t
 
     def _sync_template_with_preset(self):
         if self._syncing_template:
@@ -788,14 +826,28 @@ class YtDlpGui(tk.Tk):
 
     def _sync_format_sections(self):
         mode = self.download_mode_var.get()
+        active_bg = self.card_bg
+        inactive_bg = self.bg2
         if mode == "audio":
             self.video_format_combo.configure(state="disabled")
             self.audio_format_combo.configure(state="readonly")
             self.audio_quality_combo.configure(state="readonly")
+            self.video_section_frame.configure(bg=inactive_bg)
+            self.audio_section_frame.configure(bg=active_bg)
+            for label in self.video_section_labels:
+                label.configure(bg=inactive_bg, fg=self.fg_dim)
+            for label in self.audio_section_labels:
+                label.configure(bg=active_bg, fg=self.fg if label is not self.audio_section_labels[0] else self.accent_hover)
         else:
             self.video_format_combo.configure(state="readonly")
             self.audio_format_combo.configure(state="disabled")
             self.audio_quality_combo.configure(state="disabled")
+            self.video_section_frame.configure(bg=active_bg)
+            self.audio_section_frame.configure(bg=inactive_bg)
+            for label in self.video_section_labels:
+                label.configure(bg=active_bg, fg=self.fg if label is not self.video_section_labels[0] else self.accent_hover)
+            for label in self.audio_section_labels:
+                label.configure(bg=inactive_bg, fg=self.fg_dim)
 
     def _on_ctrl_keypress(self, event):
         widget = self.focus_get()
@@ -899,6 +951,17 @@ class YtDlpGui(tk.Tk):
             dirs.append(Path(sys.argv[0]).resolve().parent)
         return dirs
 
+    def _set_window_icon(self):
+        for base in self._runtime_dirs():
+            for rel in (Path("assets/logo-square.ico"), Path("logo-square.ico")):
+                icon_path = base / rel
+                if icon_path.exists():
+                    try:
+                        self.iconbitmap(str(icon_path))
+                        return
+                    except tk.TclError:
+                        continue
+
     def _detect_yt_dlp_command(self):
         if getattr(sys, "frozen", False):
             for base in self._runtime_dirs():
@@ -919,7 +982,8 @@ class YtDlpGui(tk.Tk):
         self.proxy_enabled_var.set(bool(data.get("proxy_enabled", False)))
         self.filename_preset_var.set(str(data.get("filename_preset", "custom")))
         self.filename_template_var.set(str(data.get("filename_template", "%(title)s.%(ext)s")))
-        self.media_profile_var.set(str(data.get("media_profile", "standard")))
+        legacy_media = str(data.get("media_profile", "standard"))
+        self.library_folder_var.set(bool(data.get("library_folder", legacy_media == "plex_emby")))
 
     def _save_settings(self):
         data = {
@@ -927,7 +991,7 @@ class YtDlpGui(tk.Tk):
             "proxy_enabled": bool(self.proxy_enabled_var.get()),
             "filename_preset": self.filename_preset_var.get().strip() or "custom",
             "filename_template": self.filename_template_var.get().strip() or "%(title)s.%(ext)s",
-            "media_profile": self.media_profile_var.get().strip() or "standard",
+            "library_folder": bool(self.library_folder_var.get()),
         }
         try:
             self.settings_path.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -997,7 +1061,7 @@ class YtDlpGui(tk.Tk):
         if self.write_auto_subs_var.get():
             cmd.append("--write-auto-subs")
 
-        if self.media_profile_var.get() == "plex_emby":
+        if self.library_folder_var.get():
             # Keep metadata files next to each item for media servers.
             cmd.extend(["--write-info-json", "--write-description", "--write-thumbnail"])
 
