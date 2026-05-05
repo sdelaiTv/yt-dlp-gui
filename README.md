@@ -21,7 +21,6 @@ This project wraps the power of `yt-dlp` in a modern interface with presets, log
 
 - This GUI fork is provided **for free use**.
 - No paid activation, no subscription.
-- Please respect local laws and the Terms of Service of the source websites.
 
 ## Upstream Credits
 
@@ -105,7 +104,3 @@ Result:
 - Stop action terminates download process tree on Windows.
 - App auto-uses bundled ffmpeg when available.
 - Logs are decoded using system encoding for better Windows locale compatibility.
-
-## Disclaimer
-
-This software is a user-side download tool. You are responsible for how you use it and for compliance with copyright law and platform policies in your jurisdiction.
