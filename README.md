@@ -4,6 +4,8 @@ Desktop GUI fork of `yt-dlp` for convenient video/audio downloading.
 
 This project wraps the power of `yt-dlp` in a modern interface with presets, logs, templates, and portable Windows build support.
 
+<img width="860" height="800" alt="downloader" src="https://github.com/user-attachments/assets/9da3925f-4063-4e74-85f2-48ded5ac1ca6" />
+
 ## About
 
 - This repository is a **fork based on `yt-dlp`** with a custom graphical interface.
@@ -104,4 +106,5 @@ Result:
 - Stop action terminates download process tree on Windows.
 - App auto-uses bundled ffmpeg when available.
 - Logs are decoded using system encoding for better Windows locale compatibility.
+
 
