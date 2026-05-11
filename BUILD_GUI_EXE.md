@@ -32,9 +32,12 @@ Run from repository root:
 
 ```powershell
 pyinstaller --name yt-dlp-gui --onefile --windowed `
+  --icon "assets\logo-square.ico" `
   --add-binary "portable-runtime\yt-dlp.exe;." `
   --add-binary "portable-runtime\ffmpeg\ffmpeg.exe;ffmpeg" `
   --add-binary "portable-runtime\ffmpeg\ffprobe.exe;ffmpeg" `
+  --add-data "assets\logo-square.ico;assets" `
+  --add-data "assets\logo-square.png;assets" `
   --add-data "assets\logo-square.svg;assets" `
   yt_dlp_gui.py
 ```
@@ -43,7 +46,13 @@ Output:
 - `dist\yt-dlp-gui.exe`
 
 Bundled assets include:
-- `assets/logo-square.svg`
+- `assets/logo-square.ico` (app/taskbar icon)
+- `assets/logo-square.png` (Tk iconphoto fallback)
+- `assets/logo-square.svg` (source)
+
+Notes:
+- Windows can cache taskbar icons aggressively. If you rebuild and still see an old icon,
+  rename the output exe or delete the old shortcut/pin and pin again.
 
 ## 4) Verify portable behavior
 
